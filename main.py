@@ -1,101 +1,89 @@
 
-# main.py
-import json
-import secrets
-import time
-from pathlib import Path
-from collections import defaultdict, deque
+from config import APP_NAME, APP_VERSION
 
-DATA = Path("data")
-DATA.mkdir(exist_ok=True)
-
-LOG = DATA / "sms_logs.json"
-
-LIMIT = 3
-WINDOW = 60
-requests = defaultdict(deque)
+from modules.providers import show_providers
+from modules.simulator import simulate_sms
+from modules.otp import generate_otp, verify_otp
+from modules.consent import (
+    add_consent,
+    revoke_consent
+)
+from modules.logger import read_logs
 
 
-def log_event(event):
-    logs = []
-    if LOG.exists():
-        logs = json.loads(LOG.read_text())
+def banner():
+    print("""
+========================================
+       ███████╗███╗   ███╗███████╗
+       ██╔════╝████╗ ████║██╔════╝
+       ███████╗██╔████╔██║███████╗
+       ╚════██║██║╚██╔╝██║╚════██║
+       ███████║██║ ╚═╝ ██║███████║
+       ╚══════╝╚═╝     ╚═╝╚══════╝
 
-    logs.append(event)
-    LOG.write_text(json.dumps(logs, indent=2))
-
-
-def generate_otp():
-    return str(secrets.randbelow(900000) + 100000)
-
-
-def rate_limit(number):
-    now = time.time()
-    queue = requests[number]
-
-    while queue and now - queue[0] > WINDOW:
-        queue.popleft()
-
-    if len(queue) >= LIMIT:
-        return False
-
-    queue.append(now)
-    return True
-
-
-def simulate_sms(number, message):
-    if not rate_limit(number):
-        print("[!] Rate limit reached.")
-        return
-
-    print("\n[SIMULATED SMS]")
-    print("Recipient:", number)
-    print("Message:", message)
-    print("Status: SIMULATED")
-    
-    log_event({
-        "recipient": number,
-        "message": message,
-        "status": "SIMULATED",
-        "timestamp": time.time()
-    })
-
-
-def show_logs():
-    if not LOG.exists():
-        print("No logs available.")
-        return
-
-    print(LOG.read_text())
+             SMS-X TOOLKIT
+========================================
+""")
 
 
 def menu():
+    banner()
+
     while True:
+        print(f"\n{APP_NAME} v{APP_VERSION}")
         print("""
-================================
-          SMS-X TOOLKIT
-================================
-1. Generate mock OTP
-2. Simulate SMS
-3. View logs
-4. Exit
-================================
+[1] Provider Profiles
+[2] Generate Mock OTP
+[3] Verify Mock OTP
+[4] Simulate SMS
+[5] Add Recipient Consent
+[6] Revoke Recipient Consent
+[7] View Activity Logs
+[0] Exit
 """)
 
-        choice = input("SMS-X > ").strip()
+        choice = input("SMS-X >> ").strip()
 
         if choice == "1":
-            print("Mock OTP:", generate_otp())
+            show_providers()
 
         elif choice == "2":
             number = input("Test recipient label: ")
+            print("Mock OTP:", generate_otp(number))
+
+        elif choice == "3":
+            number = input("Test recipient label: ")
+            entered = input("Enter OTP: ")
+
+            if verify_otp(number, entered):
+                print("[+] OTP verified.")
+            else:
+                print("[-] Invalid or expired OTP.")
+
+        elif choice == "4":
+            number = input("Recipient label: ")
             message = input("Message: ")
             simulate_sms(number, message)
 
-        elif choice == "3":
-            show_logs()
+        elif choice == "5":
+            number = input("Recipient label: ")
+            add_consent(number)
 
-        elif choice == "4":
+        elif choice == "6":
+            number = input("Recipient label: ")
+            revoke_consent(number)
+
+        elif choice == "7":
+            logs = read_logs()
+
+            if not logs:
+                print("No activity recorded.")
+            else:
+                for item in logs:
+                    print(item)
+
+        elif choice == "0":
+            print("Exiting SMS-X.")
             break
 
         else:
